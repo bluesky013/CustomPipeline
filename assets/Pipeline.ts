@@ -114,6 +114,7 @@ export function buildRayTracingComputePass(camera: renderer.scene.Camera, pipeli
         pipeline.updateStorageTexture(csOutput, width, height, gfx.Format.RGBA8);
     }
     
+    cs.setMat4('projectInverse', camera.matProjInv);
     cs.addStorageImage(csOutput, rendering.AccessType.WRITE, 'outputImage');
     cs.addQueue().addDispatch(width / 8, height / 4, 1, rtMat);
 

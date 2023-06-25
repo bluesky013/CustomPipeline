@@ -7,26 +7,59 @@ CCEffect %{
     - compute: compute-main
       pass: user-ray-tracing
       properties: &props
-        mainTexture: { value: grey }
+        mainTexture: { value: grey, target: tex }
 }%
 
 CCProgram compute-main %{
   precision highp float;
+  precision mediump image2D;
 
   layout (local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
-  #pragma rate mainTexture batch
-  uniform sampler2D mainTexture;
+  #pragma rate tex batch
+  uniform sampler2D tex;
+
+  #pragma rate constants pass
+  uniform constants {
+      mat4 projectInverse;
+  };
 
   #pragma rate outputImage pass
   layout (rgba8) writeonly uniform image2D outputImage;
 
   void main () {
+      vec3 spherePos = vec3(0, 0, -5);
+      vec3 lightPos = vec3(1, 1, -3);
+      vec3 camPos = vec3(0, 0, 0);
+      float sphereRadius = 1.0;
+
+      vec4 color = vec4(0, 0, 0, 0);
+     
       ivec2 screen = imageSize(outputImage);
       ivec2 coords = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
-      vec2 uv = vec2(float(coords.x) / screen.x, float(coords.y) / screen.y);
+      vec2 uv = vec2(float(coords.x) / float(screen.x), float(coords.y) / float(screen.y));
 
-      vec4 color = texture(mainTexture, uv); 
+      vec4 ndc = vec4(uv * 2.0 - vec2(1.0), 1.0, 1.0);
+      vec4 pos = projectInverse * ndc;
+      vec3 camD = vec3(pos.xyz / pos.w);
+      vec3 rayL = normalize(camD - camPos);
+  
+      vec3 dirS = spherePos - camPos;
+      vec3 rayS = normalize(dirS);
+      float lenS = length(dirS);
+
+      float dotLS = dot(rayL, rayS);
+      float angle = acos(dotLS);
+      float projDist = lenS * sin(angle);
+
+      if (projDist < sphereRadius) {
+        vec3 rayI = rayL * (lenS * dotLS - sqrt(sphereRadius * sphereRadius - projDist * projDist));
+
+        vec3 N = normalize(rayI - dirS);
+        vec3 L = normalize(lightPos - rayI);
+        color = vec4(vec3(max(dot(N, L), 0.05)), 1.0);
+      }
+
       imageStore(outputImage, coords, color);
   }
 }%
