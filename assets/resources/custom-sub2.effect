@@ -39,13 +39,13 @@ CCProgram standard-fs %{
 
   #pragma subpass
   #pragma subpassColor in c0
-  #pragma subpassColor inout color
+  #pragma subpassColor inout outColor
   #pragma subpassColor in c1
 
   void main () {
     vec4 v1 = subpassLoad(c0);
     vec4 v2 = subpassLoad(c1);
-    vec4 prevColor = subpassLoad(color);
-    color = prevColor + v1 + v2;
+    vec4 prevColor = subpassLoad(outColor);
+    outColor = prevColor + v1 + v2;
   }
 }%

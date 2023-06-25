@@ -161,6 +161,6 @@
     }
   },
   "macroConfig": {
-    "CUSTOM_PIPELINE_NAME": "CustomPipeline2"
+    "CUSTOM_PIPELINE_NAME": "CustomPipeline"
   }
 }

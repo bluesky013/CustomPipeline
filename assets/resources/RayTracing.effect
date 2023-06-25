@@ -1,0 +1,32 @@
+// Effect Syntax Guide: https://docs.cocos.com/creator/manual/zh/shader/index.html
+
+CCEffect %{
+  techniques:
+  - name: opaque
+    passes:
+    - compute: compute-main
+      pass: user-ray-tracing
+      properties: &props
+        mainTexture: { value: grey }
+}%
+
+CCProgram compute-main %{
+  precision highp float;
+
+  layout (local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
+
+  #pragma rate mainTexture batch
+  uniform sampler2D mainTexture;
+
+  #pragma rate outputImage pass
+  layout (rgba8) writeonly uniform image2D outputImage;
+
+  void main () {
+      ivec2 screen = imageSize(outputImage);
+      ivec2 coords = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
+      vec2 uv = vec2(float(coords.x) / screen.x, float(coords.y) / screen.y);
+
+      vec4 color = texture(mainTexture, uv); 
+      imageStore(outputImage, coords, color);
+  }
+}%

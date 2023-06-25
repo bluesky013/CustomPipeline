@@ -10,6 +10,7 @@ let sub0Mat: Material = null;
 let sub1Mat: Material = null;
 let sub2Mat: Material = null;
 let blitMat: Material = null;
+let rtMat: Material = null;
 
 resources.load('custom-sub0', Material, (error, material) => {
     sub0Mat = material;
@@ -25,6 +26,10 @@ resources.load('custom-sub2', Material, (error, material) => {
 
 resources.load('blitMat', Material, (error, material) => {
     blitMat = material;
+});
+
+resources.load('RayTracing', Material, (error, material) => {
+    rtMat = material;
 });
 
 function addOrUpdateRenderTarget(name: string, format: gfx.Format, width: number, height: number, residency: rendering.ResourceResidency, pipeline: rendering.Pipeline) {
@@ -52,42 +57,37 @@ export function buildProgrammableBlendPass(camera: renderer.scene.Camera, pipeli
     const width = area.width;
     const height = area.height;
 
-    addOrUpdateRenderTarget("c0", gfx.Format.RGBA8, width, height, rendering.ResourceResidency.MEMORYLESS, pipeline);
-    addOrUpdateRenderTarget("c1", gfx.Format.RGBA8, width, height, rendering.ResourceResidency.MEMORYLESS, pipeline);
-    addOrUpdateRenderTarget("c2", gfx.Format.RGBA8, width, height, rendering.ResourceResidency.MEMORYLESS, pipeline);
-    addOrUpdateRenderTarget("c3", gfx.Format.RGBA8, width, height, rendering.ResourceResidency.MEMORYLESS, pipeline);
-    addOrUpdateRenderTarget("c4", gfx.Format.RGBA8, width, height, rendering.ResourceResidency.MANAGED, pipeline);
-    // addOrUpdateRenderTarget("ds", gfx.Format.DEPTH, width, height, rendering.ResourceResidency.MEMORYLESS, pipeline);
+    addOrUpdateRenderTarget("color0", gfx.Format.RGBA8, width, height, rendering.ResourceResidency.MEMORYLESS, pipeline);
+    addOrUpdateRenderTarget("color1", gfx.Format.RGBA8, width, height, rendering.ResourceResidency.MEMORYLESS, pipeline);
+    addOrUpdateRenderTarget("color2", gfx.Format.RGBA8, width, height, rendering.ResourceResidency.MEMORYLESS, pipeline);
+    addOrUpdateRenderTarget("color3", gfx.Format.RGBA8, width, height, rendering.ResourceResidency.MEMORYLESS, pipeline);
+    addOrUpdateRenderTarget("finalColor", gfx.Format.RGBA8, width, height, rendering.ResourceResidency.MANAGED, pipeline);
 
     const clearColor = new gfx.Color(0, 0, 0, 0);
     const builder = pipeline.addRenderPass(width, height, 'default');
     const subpass0 = builder.addRenderSubpass('custom-sub0');
-    subpass0.addRenderTarget("c0", rendering.AccessType.WRITE, "_", gfx.LoadOp.CLEAR, gfx.StoreOp.DISCARD, clearColor);
-    subpass0.addRenderTarget("c1", rendering.AccessType.WRITE, "_", gfx.LoadOp.CLEAR, gfx.StoreOp.DISCARD, clearColor);
-    subpass0.addRenderTarget("c2", rendering.AccessType.WRITE, "_", gfx.LoadOp.CLEAR, gfx.StoreOp.DISCARD, clearColor);
-    subpass0.addRenderTarget("c3", rendering.AccessType.WRITE, "_", gfx.LoadOp.CLEAR, gfx.StoreOp.DISCARD, clearColor);
-    // subpass0.addDepthStencil("ds", rendering.AccessType.WRITE, "_", gfx.LoadOp.CLEAR, gfx.StoreOp.DISCARD);
+    subpass0.addRenderTarget("color0", rendering.AccessType.WRITE, "_", gfx.LoadOp.CLEAR, gfx.StoreOp.DISCARD, clearColor);
+    subpass0.addRenderTarget("color1", rendering.AccessType.WRITE, "_", gfx.LoadOp.CLEAR, gfx.StoreOp.DISCARD, clearColor);
+    subpass0.addRenderTarget("color2", rendering.AccessType.WRITE, "_", gfx.LoadOp.CLEAR, gfx.StoreOp.DISCARD, clearColor);
+    subpass0.addRenderTarget("color3", rendering.AccessType.WRITE, "_", gfx.LoadOp.CLEAR, gfx.StoreOp.DISCARD, clearColor);
 
     subpass0
         .addQueue(rendering.QueueHint.RENDER_OPAQUE)
         .addFullscreenQuad(sub0Mat, 0);
 
     const subpass1 = builder.addRenderSubpass('custom-sub1');
-    subpass1.addRenderTarget("c0", rendering.AccessType.READ, "c0", gfx.LoadOp.DISCARD, gfx.StoreOp.DISCARD, clearColor);
-    subpass1.addRenderTarget("c4", rendering.AccessType.WRITE, "color", gfx.LoadOp.CLEAR, gfx.StoreOp.STORE, clearColor);
-    subpass1.addRenderTarget("c1", rendering.AccessType.READ, "c1", gfx.LoadOp.DISCARD, gfx.StoreOp.DISCARD, clearColor);
-    
-    // subpass1.addDepthStencil("ds", rendering.AccessType.READ, "inds", gfx.LoadOp.DISCARD, gfx.StoreOp.DISCARD);
+    subpass1.addRenderTarget("color0", rendering.AccessType.READ, "c0", gfx.LoadOp.DISCARD, gfx.StoreOp.DISCARD, clearColor);
+    subpass1.addRenderTarget("color1", rendering.AccessType.READ, "c1", gfx.LoadOp.DISCARD, gfx.StoreOp.DISCARD, clearColor);
+    subpass1.addRenderTarget("finalColor", rendering.AccessType.WRITE, "outColor", gfx.LoadOp.CLEAR, gfx.StoreOp.STORE, clearColor);
 
     subpass1
         .addQueue(rendering.QueueHint.RENDER_OPAQUE)
         .addFullscreenQuad(sub1Mat, 0);
 
     const subpass2 = builder.addRenderSubpass('custom-sub2');
-    subpass2.addRenderTarget("c3", rendering.AccessType.READ, "c1", gfx.LoadOp.DISCARD, gfx.StoreOp.DISCARD, clearColor);
-    subpass2.addRenderTarget("c4", rendering.AccessType.READ_WRITE, "color", gfx.LoadOp.DISCARD, gfx.StoreOp.STORE, clearColor);
-    subpass2.addRenderTarget("c2", rendering.AccessType.READ, "c0", gfx.LoadOp.DISCARD, gfx.StoreOp.DISCARD, clearColor);
-    // subpass2.addDepthStencil("ds", rendering.AccessType.READ, "inds", gfx.LoadOp.DISCARD, gfx.StoreOp.DISCARD);
+    subpass2.addRenderTarget("color2", rendering.AccessType.READ, "c0", gfx.LoadOp.DISCARD, gfx.StoreOp.DISCARD, clearColor);
+    subpass2.addRenderTarget("color3", rendering.AccessType.READ, "c1", gfx.LoadOp.DISCARD, gfx.StoreOp.DISCARD, clearColor);
+    subpass2.addRenderTarget("finalColor", rendering.AccessType.READ_WRITE, "outColor", gfx.LoadOp.DISCARD, gfx.StoreOp.STORE, clearColor);
 
     subpass2
         .addQueue(rendering.QueueHint.RENDER_OPAQUE)
@@ -101,9 +101,30 @@ export function buildProgrammableBlendPass(camera: renderer.scene.Camera, pipeli
     // set.bindTexture(0, null, 0);
 }
 
+export function buildRayTracingComputePass(camera: renderer.scene.Camera, pipeline: rendering.Pipeline) {
+    const cs = pipeline.addComputePass('user-ray-tracing');
+    const area = getRenderArea(camera, camera.window.width, camera.window.height);
+    const width = area.width;
+    const height = area.height;
+
+    const csOutput = 'cs_output';
+    if (!pipeline.containsResource(csOutput)) {
+        pipeline.addStorageTexture(csOutput, gfx.Format.RGBA8, width, height, rendering.ResourceResidency.MANAGED);
+    } else {
+        pipeline.updateStorageTexture(csOutput, width, height, gfx.Format.RGBA8);
+    }
+    
+    cs.addStorageImage(csOutput, rendering.AccessType.WRITE, 'outputImage');
+    cs.addQueue().addDispatch(width / 8, height / 4, 1, rtMat);
+
+    return csOutput;
+}
+
 export function buildNativePipeline(cameras: renderer.scene.Camera[], pipeline: rendering.Pipeline) {
-    buildProgrammableBlendPass(cameras[0], pipeline);
-    buildNativeForwardPass(cameras[0], pipeline);
+    // buildProgrammableBlendPass(cameras[0], pipeline);
+    const rtName = buildRayTracingComputePass(cameras[0], pipeline);
+    // buildNativeForwardPass(cameras[0], pipeline);
+    buildPostprocessPass(cameras[0], pipeline, rtName, AntiAliasing.NONE);
 }
 
 export function buildWebPipeline (cameras: renderer.scene.Camera[], pipeline: rendering.Pipeline) {

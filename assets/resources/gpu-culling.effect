@@ -1,0 +1,105 @@
+// Copyright (c) 2023 Xiamen Yaji Software Co., Ltd.
+CCEffect %{
+  techniques:
+  - name: gpu-culling
+    passes:
+    - compute: culling-main
+      pass: gpu-culling-cs
+}%
+
+CCProgram culling-main %{
+  precision highp float;
+
+  struct ObjectData {
+    mat4 matWorld;
+    mat4 matWorldIT;
+    vec4 center;
+    vec4 halfExtents;
+    vec4 lightingMapUVParam;
+    vec4 localShadowBias;
+  };
+
+  struct InstanceData {
+    uint objectId;
+    uint batchId;
+  };
+
+  struct DrawIndexedIndirectCommand {
+    uint indexCount;
+    uint instanceCount;
+    uint firstIndex;
+    int vertexOffset;
+    uint firstInstance;
+  };
+
+  #pragma rate CCGPUCullData phase
+  layout(std140) uniform CCGPUCullData {   
+    vec4 cc_frustumPlanes[6];
+    uint cc_instanceCount;
+    uint cc_sceneFlags;
+  };
+
+  #pragma rate CCObjectBuffer phase
+  layout(std430) readonly buffer CCObjectBuffer { ObjectData cc_objects[]; };
+
+  #pragma rate CCInstanceBuffer phase
+  layout(std430) readonly buffer CCInstanceBuffer { InstanceData cc_instances[]; };
+
+  #pragma rate CCDrawInstanceBuffer phase
+  layout(std430) buffer CCDrawInstanceBuffer { uint cc_drawInstances[]; };
+
+  #pragma rate CCDrawIndirectBuffer phase
+  layout(std430) buffer CCDrawIndirectBuffer { DrawIndexedIndirectCommand cc_indirectCmds[]; };
+
+  #if CC_USE_FRUSTUM_CULLING
+    bool frustumCull(uint objectId) {
+      vec4 center = cc_objects[objectId].center;
+      vec4 halfExt = cc_objects[objectId].halfExtents;
+
+      for (int i = 0; i < 6; i++) {
+        vec4 plane = cc_frustumPlanes[i];
+        if (dot(plane.xyz, center.xyz) + dot(abs(plane.xyz), halfExt.xyz) < plane.w) {
+          return false; // Outside of frustum
+        }
+      }
+
+      return true; // Intersects with frustum
+    }
+  #endif
+
+  #if CC_USE_OCCLUSION_CULLING
+    bool occlusionCull(uint objectId) {
+      return true;
+    }
+  #endif
+
+  layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+  void main()
+  {
+    uint id = gl_GlobalInvocationID.x;
+    if (id >= cc_instanceCount) {
+      return;
+    }
+
+    uint objectId = cc_instances[id].objectId;
+
+    #if CC_USE_FRUSTUM_CULLING
+      if (!frustumCull(objectId)) {
+        return;
+      }
+    #endif
+
+    #if CC_USE_OCCLUSION_CULLING
+      if (!occlusionCull(objectId)) {
+        return;
+      }
+    #endif
+
+    uint batchId = cc_instances[id].batchId;
+    uint index = atomicAdd(cc_indirectCmds[batchId].instanceCount, 1);
+    uint instanceId = cc_indirectCmds[batchId].firstInstance + index;
+
+    cc_drawInstances[instanceId] = objectId;
+  }
+}%
